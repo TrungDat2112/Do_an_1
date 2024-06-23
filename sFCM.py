@@ -7,6 +7,7 @@ from scipy.spatial.distance import pdist, squareform
 from sklearn.metrics import silhouette_samples, silhouette_score
 from sklearn.metrics import pairwise_distances
 import tkinter as tk
+from scipy.special import comb
 
 np.random.seed(0)
 file_path = 'iris.data'
@@ -14,6 +15,7 @@ column_name = ['sepal_length', 'sepal_width', 'petal_length', 'prtal_width', 'sp
 data = pd.read_csv(file_path, header=None, names = column_name)
 species_to_cluster = {species: idx for idx, species in enumerate(data['species'].unique())}
 data['cluster'] = data['species'].map(species_to_cluster)
+true_labels = data['cluster'].values
 n_samples = data.shape[0]
 n_feature = data.shape[1] - 2
 n_clusters = len(data['species'].unique())
@@ -156,6 +158,47 @@ def alternative_simplified_silhouette_samples(X, labels, centroids, epsilon=1e-5
 
     return silhouette_values
 
+def contingency_table(labels_true, labels_pred):
+    n_samples = len(labels_true)
+    contingency = np.zeros((n_samples, n_samples), dtype=int)
+    for i in range(n_samples):
+        for j in range(n_samples):
+            contingency[i, j] = (labels_true[i] == labels_true[j]) and (labels_pred[i] == labels_pred[j])
+    return contingency
+
+# Tính Rand Index
+def rand_index(labels_true, labels_pred):
+    contingency = contingency_table(labels_true, labels_pred)
+    tp_plus_fp = comb(np.sum(contingency, axis=1), 2).sum()
+    tp_plus_fn = comb(np.sum(contingency, axis=0), 2).sum()
+    tp = comb(contingency, 2).sum()
+    fp = tp_plus_fp - tp
+    fn = tp_plus_fn - tp
+    tn = comb(len(labels_true), 2) - tp - fp - fn
+    return (tp + tn) / (tp + fp + fn + tn)
+
+# Tính Adjusted Rand Index
+def adjusted_rand_index(labels_true, labels_pred):
+    contingency = contingency_table(labels_true, labels_pred)
+    sum_comb_c = comb(np.sum(contingency, axis=1), 2).sum()
+    sum_comb_k = comb(np.sum(contingency, axis=0), 2).sum()
+    sum_comb = comb(contingency, 2).sum()
+    n = len(labels_true)
+    index = sum_comb
+    expected_index = sum_comb_c * sum_comb_k / comb(n, 2)
+    max_index = (sum_comb_c + sum_comb_k) / 2
+    return (index - expected_index) / (max_index - expected_index)
+
+# Tính Jaccard Coefficient
+def jaccard_coefficient(labels_true, labels_pred):
+    contingency = contingency_table(labels_true, labels_pred)
+    tp_plus_fp = comb(np.sum(contingency, axis=1), 2).sum()
+    tp_plus_fn = comb(np.sum(contingency, axis=0), 2).sum()
+    tp = comb(contingency, 2).sum()
+    fp = tp_plus_fp - tp
+    fn = tp_plus_fn - tp
+    return tp / (tp + fp + fn)
+
 root = tk.Tk()
 root.title("SFCM")
 root.geometry("400x400")
@@ -204,6 +247,9 @@ def run_sFCM():
     centroids = calculate_centroids(X, cluster_labels, k=np.unique(cluster_labels).size)
     asswc_values = alternative_simplified_silhouette_samples(X, cluster_labels, centroids)
     mean_asswc = np.mean(asswc_values)
+    Rand_index =  rand_index(true_labels, cluster_labels)
+    Adjusted_Rand_Index = adjusted_rand_index(true_labels, cluster_labels)
+    Jaccard_Coefficient = jaccard_coefficient(true_labels, cluster_labels)
     frame_2 = tk.Frame(root, width=200, height=200)
     frame_2.grid(row=0, column=1, sticky='nsew')
     label_cl = tk.Label(frame_2, text="Cluster centers", font=("Courier", 14))
@@ -218,7 +264,7 @@ def run_sFCM():
     l.pack() 
     T = tk.Text(frame_3, height=12, width=52)
     T.pack(expand=True, fill='both') 
-    full_text = f"Jm: {Jm}\nFc: {Fc}\nHc: {Hc}\n1 - Fc: {One_minus_Fc}\nVRC: {vrc_score}\nDB: {db_score}\nDunn: {dn_index}\nSWC: {avg_silhouette}\nASWC: {avg_alt_silhouette}\nASSWC: {mean_asswc}"
+    full_text = f"Jm: {Jm}\nFc: {Fc}\nHc: {Hc}\n1 - Fc: {One_minus_Fc}\nVRC: {vrc_score}\nDB: {db_score}\nDunn: {dn_index}\nSWC: {avg_silhouette}\nASWC: {avg_alt_silhouette}\nw: {Rand_index}\nwA: {Adjusted_Rand_Index}\nwJ: {Jaccard_Coefficient}"
     T.insert(tk.END, full_text)
     frame_4 = tk.Frame(root, width=200, height=200)
     frame_4.grid(row=1, column=1)
